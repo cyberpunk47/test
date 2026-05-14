@@ -25,7 +25,7 @@ pipeline {
                     node index.js &
                     sleep 5
 
-                    curl http://localhost:4000/health
+                    curl http://localhost:3000/health
                 '''
             }
         }
