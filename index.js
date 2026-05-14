@@ -1,11 +1,32 @@
-import express from "express"
+const express = require('express');
+const app = express();
+const PORT = 3000;
 
-const app = express()
+// Track connections (for monitoring)
+let connections = 0;
 
-app.get("/",(req,res)=>{
-    res.send("hello ")
-})
+app.use((req, res, next) => {
+    connections++;
+    console.log(` Active Connections: ${connections}`);
+    res.on('finish', () => connections--);
+    next();
+});
 
-app.listen(4000,()=>{
-    console.log("App is running on 4000 ")
-})
+// Main route
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Hello from Server! 🚀',
+        pod: process.env.HOSTNAME || 'unknown',
+        connections: connections,
+        time: new Date().toISOString()
+    });
+});
+
+// Health check (Kubernetes ise use karega)
+app.get('/health', (req, res) => {
+    res.json({ status: 'healthy ' });
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

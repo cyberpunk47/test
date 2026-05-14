@@ -1,88 +1,77 @@
 pipeline {
     agent any
 
-    // Environment variables for the whole pipeline
-    environment {
-        APP_PORT = '4000'
-        NODE_VERSION = '18' // Adjust to your preferred Node.js version
-    }
-
     stages {
-        // Stage 1: Get the code from the repository
-        stage('Checkout') {
+
+        stage('Git Checkout') {
             steps {
-                // This step checks out your code when linked to SCM
+                echo "Pulling Code from GitHub"
                 checkout scm
-                echo "Code checked out from ${env.BRANCH_NAME} branch"
             }
         }
 
-        // Stage 2: Set up Node.js and install dependencies
-        stage('Setup') {
+        stage('Install Dependencies') {
             steps {
-                echo "Setting up Node.js ${NODE_VERSION}..."
-                sh '''
-                    # It's best practice to use a Node.js plugin (NodeJS Plugin),
-                    # but for a basic shell setup, you can ensure 'node' is on PATH.
-                    node --version
-                    npm --version
-                '''
-                echo "Installing project dependencies..."
-                sh 'npm install' // Reads from package.json
+                echo "Installing Dependencies"
+                sh 'npm install'
             }
         }
 
-        // Stage 3: Run tests (if you add any later)
-        stage('Test') {
+        stage('Test Application') {
             steps {
-                echo "Running tests..."
-                // For now, just a placeholder. Your package.json has no test script yet.
-                // sh 'npm test'
-                echo "No tests defined yet, skipping."
-            }
-        }
+                echo "Running tests"
 
-        // Stage 4: Start the application for a quick smoke test
-        stage('Smoke Test') {
-            steps {
-                echo "Starting app on port ${APP_PORT} for a quick check..."
-                // Run in background, test, then kill
                 sh '''
                     node index.js &
-                    APP_PID=$!
-                    sleep 3 # Wait for app to start
+                    sleep 5
 
-                    # Test the endpoint
-                    response=$(curl -s http://localhost:4000)
-                    if [ "$response" = "hello " ]; then
-                        echo "SUCCESS: App responded correctly."
-                    else
-                        echo "FAILURE: App response was unexpected."
-                        kill $APP_PID
-                        exit 1
-                    fi
+                    curl http://localhost:4000/health
+                '''
+            }
+        }
 
-                    kill $APP_PID
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image'
+                sh 'docker build -t my-app:v1 .'
+            }
+        }
+
+        stage('Load Image to Minikube') {
+            steps {
+                echo 'Loading image into Minikube'
+                sh 'minikube image load my-app:v1'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo 'Deploying to Kubernetes'
+                sh 'kubectl apply -f k8s-all.yaml'
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                echo 'Checking deployment'
+
+                sh '''
+                    kubectl get pods
+                    kubectl get svc
+                    kubectl get hpa
                 '''
             }
         }
     }
 
-    // Actions to run after the pipeline finishes (success or failure)
     post {
-        always {
-            // Clean the workspace to save space, except on failure for debugging
-            cleanWs cleanWhenNotBuilt: false,
-                     deleteDirs: true,
-                     notFailBuild: true
-            echo 'Pipeline finished. Workspace cleaned.'
-        }
+
         success {
-            echo 'All stages passed successfully!'
+            echo "Pipeline completed successfully"
         }
+
         failure {
-            echo 'Pipeline failed. Check the logs above.'
-            // In a real setup, you'd send a notification here (Slack, email, etc.)
+            echo "Pipeline failed"
         }
     }
 }
